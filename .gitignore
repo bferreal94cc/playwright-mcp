@@ -19,3 +19,9 @@ sessions/
 .swarm/*.db-shm
 .swarm/*.db-wal
 ruvector.db
+
+# Ruflo daemon state and generated metrics/receipts (rewritten every run)
+.claude-flow/daemon.pid
+.claude-flow/daemon-state.json
+.claude-flow/metrics/
+.claude-flow/policy/
