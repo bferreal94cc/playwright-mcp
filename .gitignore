@@ -6,3 +6,16 @@ playwright-report/
 .DS_Store
 .env
 sessions/
+
+# Ruflo local secrets and runtime data
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# Ruflo runtime databases
+.swarm/*.db
+.swarm/*.db-shm
+.swarm/*.db-wal
+ruvector.db
