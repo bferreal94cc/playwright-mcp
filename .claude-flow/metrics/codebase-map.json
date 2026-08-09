@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-08-09T07:41:37.599Z",
+  "projectRoot": "/home/runner/work/playwright-mcp/playwright-mcp",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1786261297599
+}
