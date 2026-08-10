@@ -18,6 +18,7 @@ sessions/
 .swarm/*.db
 .swarm/*.db-shm
 .swarm/*.db-wal
+.swarm/backups/
 ruvector.db
 
 # Ruflo daemon state and generated metrics/receipts (rewritten every run)
