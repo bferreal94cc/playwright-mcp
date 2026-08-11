@@ -177,3 +177,33 @@ class TestCLI:
 
     def test_group_reporting_flag_runs(self):
         assert main(["--scenario", "healthcare", "--days", "2", "--groups"]) == 0
+
+    def test_retail_group_reporting_runs_a_full_week(self):
+        assert main(["--scenario", "retail", "--days", "7", "--groups"]) == 0
+
+
+class TestCLIArgumentValidation:
+    """Bad input must produce an argparse error, never a traceback."""
+
+    @pytest.mark.parametrize("dial", ["5", "-0.5", "1.01", "banana"])
+    def test_out_of_range_profit_weight_is_rejected(self, dial, capsys):
+        with pytest.raises(SystemExit) as exit_info:
+            main(["--scenario", "retail", "--profit-weight", dial])
+        assert exit_info.value.code == 2
+        assert "profit-weight" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("days", ["0", "-3", "half"])
+    def test_non_positive_days_is_rejected(self, days, capsys):
+        with pytest.raises(SystemExit) as exit_info:
+            main(["--scenario", "retail", "--days", days])
+        assert exit_info.value.code == 2
+        assert "days" in capsys.readouterr().err
+
+    def test_boundary_dial_values_are_accepted(self):
+        assert main(["--scenario", "retail", "--days", "1", "--profit-weight", "0"]) == 0
+        assert main(["--scenario", "retail", "--days", "1", "--profit-weight", "1"]) == 0
+
+    def test_unknown_scenario_is_rejected(self):
+        with pytest.raises(SystemExit) as exit_info:
+            main(["--scenario", "spaceship"])
+        assert exit_info.value.code == 2

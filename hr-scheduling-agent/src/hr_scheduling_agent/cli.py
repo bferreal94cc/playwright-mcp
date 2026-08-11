@@ -107,24 +107,27 @@ def run_scenario(name: str, profit_weight: float, days: int, groups_demo: bool) 
     _step("Exception Handler (live call-out)")
     schedule = orchestrator.schedule
     assert schedule is not None
-    victim = schedule.assignments[len(schedule.assignments) // 2]
-    event = ExceptionEvent(
-        type=ExceptionType.CALL_OUT,
-        shift_id=victim.shift_id,
-        employee_id=victim.employee_id,
-        reported_at=datetime.now(),
-        note="woke up unwell",
-    )
-    print(f"   {victim.employee_id} calls out of {victim.shift_id}")
-    resolved = orchestrator.resolve_exception(event)
-    resolution = resolved.data["resolution"]
-    print(f"   triaged in {resolution.resolved_in_ms:.1f}ms")
-    for option in resolution.options:
-        print(f"     option: {option.describe()}")
-    if resolved.ok:
-        print(f"   {orchestrator.apply_cover(event, resolution).summary}")
+    if not schedule.assignments:
+        print("   nothing was scheduled, so there is no shift to break")
     else:
-        print(f"   ESCALATED: {resolved.summary}")
+        victim = schedule.assignments[len(schedule.assignments) // 2]
+        event = ExceptionEvent(
+            type=ExceptionType.CALL_OUT,
+            shift_id=victim.shift_id,
+            employee_id=victim.employee_id,
+            reported_at=datetime.now(),
+            note="woke up unwell",
+        )
+        print(f"   {victim.employee_id} calls out of {victim.shift_id}")
+        resolved = orchestrator.resolve_exception(event)
+        resolution = resolved.data["resolution"]
+        print(f"   triaged in {resolution.resolved_in_ms:.1f}ms")
+        for option in resolution.options:
+            print(f"     option: {option.describe()}")
+        if resolved.ok:
+            print(f"   {orchestrator.apply_cover(event, resolution).summary}")
+        else:
+            print(f"   ESCALATED: {resolved.summary}")
 
     # 6. Natural language ---------------------------------------------------
     _step("NLU + routing")
@@ -179,6 +182,28 @@ def run_scenario(name: str, profit_weight: float, days: int, groups_demo: bool) 
     return clean
 
 
+def _dial(value: str) -> float:
+    """Parse the profit/wellbeing dial, rejecting anything outside [0, 1]."""
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number")
+    if not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError(f"must be between 0.0 and 1.0, got {parsed:g}")
+    return parsed
+
+
+def _positive_days(value: str) -> int:
+    """Parse a day count. Zero days would leave nothing to schedule."""
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a whole number")
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1 day, got {parsed}")
+    return parsed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="HR scheduling agent demo")
     parser.add_argument(
@@ -186,11 +211,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--profit-weight",
-        type=float,
+        type=_dial,
         default=0.5,
         help="0.0 optimises purely for employee wellbeing, 1.0 purely for labour cost",
     )
-    parser.add_argument("--days", type=int, default=7, help="days of demand to schedule")
+    parser.add_argument(
+        "--days", type=_positive_days, default=7, help="days of demand to schedule"
+    )
     parser.add_argument(
         "--groups", action="store_true", help="demonstrate the group disparity report"
     )
