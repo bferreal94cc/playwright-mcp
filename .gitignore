@@ -20,3 +20,10 @@ sessions/
 .swarm/*.db-shm
 .swarm/*.db-wal
 ruvector.db
+
+# Ruflo daemon and metrics
+.claude-flow/daemon-state.json
+.claude-flow/daemon.pid
+.claude-flow/metrics/
+.claude/helpers/.helpers-version
+.claude/helpers/helpers.manifest.json
