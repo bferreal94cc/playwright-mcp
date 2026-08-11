@@ -80,31 +80,61 @@ The Google Agents CLI can be used to:
 
 ### Example Integration Pattern
 
-```python
-from google.agents import agent
+ADK tools are plain Python functions passed to the agent via `tools=[...]`. The
+docstring and type hints are what the model sees, so they carry the description
+of when and how to use the tool. This mirrors the agent the CLI itself
+scaffolds (`agents-cli create` → `app/agent.py`):
 
-# Use Playwright MCP tools in agent code
-@agent.tool
-def navigate_and_interact(url: str):
-    """Navigate to URL and interact using Playwright MCP"""
-    # Agent calls playwright MCP endpoints
-    pass
+```python
+from google.adk.agents import Agent
+from google.adk.models import Gemini
+
+MODEL = "gemini-3.6-flash"
+
+
+def navigate_and_interact(url: str) -> str:
+    """Navigate to a URL and report what is on the page.
+
+    Args:
+        url: The absolute URL to open.
+
+    Returns:
+        A text summary of the resulting page.
+    """
+    # Drive the Playwright MCP server here (e.g. an MCP client session
+    # calling browser_navigate followed by browser_snapshot).
+    ...
+
+
+root_agent = Agent(
+    name="root_agent",
+    model=Gemini(model=MODEL),
+    instruction="You are a browser automation assistant.",
+    tools=[navigate_and_interact],
+)
 ```
+
+To connect the Playwright MCP server to an agent directly rather than wrapping
+it by hand, use ADK's MCP tool support — see the
+[ADK tools documentation](https://google.github.io/adk-docs/tools/) for the
+current API.
 
 ## Authentication
 
 To fully use Google Agents CLI features (especially deployment and publishing):
 
 ```bash
-uvx google-agents-cli login
+uvx google-agents-cli login -i
 ```
+
+The `-i`/`--interactive` flag is required — `login` refuses to run without it.
+To check the current state instead of authenticating, use
+`uvx google-agents-cli login --status`.
 
 This enables:
 - Deployment to Google Cloud projects
 - Publishing to Gemini Enterprise
 - Accessing Agent Runtime services
-
-Run with `--interactive (-i)` flag for guided authentication.
 
 ## Next Steps
 
