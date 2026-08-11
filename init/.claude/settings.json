@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx init*)",
+      "mcp__init__*"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  },
+  "mcpServers": {
+    "init": {
+      "command": "npx",
+      "args": ["-y", "init@latest", "mcp", "start"]
+    }
+  }
+}

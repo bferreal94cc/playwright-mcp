@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "generator": "0.1.0",
+  "template": "minimal",
+  "template_version": "0.0.0",
+  "vars": {
+    "name": "init",
+    "description": "My AI agent harness",
+    "host": "claude-code"
+  },
+  "hosts": [
+    "claude-code"
+  ],
+  "files": {
+    ".claude/settings.json": "add82493bf769672760a263c341726241d1073d6bd827cdcb8336f0e6cfacfba",
+    ".claude-plugin/plugin.json": "9b962b0fdf8dedaa8c4e465796475196c8b0579e3d015022ac024a2a85d3e3b8",
+    "CLAUDE.md": "6f54a693e19633cdc1b2755352ee6303b4c973c5dd5b9cbe6e318338f1005881",
+    "README.md": "ea160a91cd66763e80f679fc8d571dc6daeff8e4b7b33fea2ba45a23478c99a5",
+    "__tests__/smoke.test.ts": "e352469f14141fd1e95a7b08615b657c1404e12faf1b44df2d1610336c26d30d",
+    "bin/cli.js": "3b328b1bf6f2953d447836bb8f1886b42a72c9da4587e871bd9f9a3cc1b361a4",
+    "package.json": "3ffd20d130bcd809d8ba277d4d44fe99badf78d5629701f6c4bfa21e96f1ebc0",
+    "src/init.ts": "fba7cdeec6e4b5c9d63e0b7d4222db0586a6509e87a40bd5e74f347dc9fd391a",
+    "tsconfig.json": "8b4e730a1aa39162ac574455d7a98e1881f5313ca80ffe503b9652dcf0c76b9d",
+    "vitest.config.ts": "e9e94875611ab1cd602c1f6923902c2dab7953a75ac022962973639d1937587a",
+    "LICENSE": "e5b36f78b98d18c315b3c943d08a562e2bcb073a9cf0a2ae24424d11906855e3",
+    ".claude/skills/evolve/SKILL.md": "6d7da7dad3164dd2187f8ab2da39a16dad50055b52ad281a32ab91824a9a887c"
+  },
+  "generated_at": "2026-08-11T00:32:15.833Z",
+  "meta": {
+    "surface": "cli"
+  }
+}
