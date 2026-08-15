@@ -1,0 +1,30 @@
+{
+  "startedAt": "2026-08-15T12:00:01.768Z",
+  "backend": "direct",
+  "groups": {
+    "products": {
+      "urls": 261,
+      "scraped": 261,
+      "failed": 0,
+      "failures": []
+    },
+    "categories": {
+      "urls": 110,
+      "scraped": 110,
+      "failed": 0,
+      "failures": []
+    },
+    "pages": {
+      "urls": 20,
+      "scraped": 19,
+      "failed": 1,
+      "failures": [
+        {
+          "url": "https://www.pokene.com/contact",
+          "error": "HTTP 404"
+        }
+      ]
+    }
+  },
+  "finishedAt": "2026-08-15T12:00:55.495Z"
+}
