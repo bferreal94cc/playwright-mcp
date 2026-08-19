@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hr-scheduling-agent"
+version = "0.1.0"
+description = "Multi-agent HR scheduling system: constraint optimization, real-time exception handling, approval workflows, and hiring automation."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+google = ["google-adk>=0.1.0"]
+anthropic = ["anthropic>=0.40.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hr-agent = "hr_scheduling_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
