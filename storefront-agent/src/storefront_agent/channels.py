@@ -10,30 +10,22 @@ implements the full contract, holds real state, and is what the demo and the
 tests run against. That is what lets the whole system be exercised end to end
 with no accounts and no credentials.
 
-:class:`ShopifyConnector` is the live one. It speaks the GraphQL Admin API over
-``urllib`` from the standard library, so the package still has no third-party
-dependencies. Amazon and eBay ship as ports with the same surface: their auth
-flows (LWA and OAuth respectively) are substantial enough that stubbing them
-convincingly would be worse than leaving an honest ``NotImplementedError``.
+The live Shopify adapter lives in :mod:`storefront_agent.shopify` -- it is the
+one that talks to a real storefront and it needs the room. It is still reachable
+as ``channels.ShopifyConnector`` for anything that imported it from here.
+
+Amazon and eBay ship as ports with the same surface: their auth flows (LWA and
+OAuth respectively) are substantial enough that stubbing them convincingly would
+be worse than leaving an honest ``NotImplementedError``.
 """
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .domain import Channel, Listing, ListingState, Money, Order, Shipment
-from .security import (
-    IdempotencyGuard,
-    RateLimiter,
-    SecretRef,
-    SecretResolver,
-    idempotency_key,
-)
+from .domain import Channel, Listing, ListingState, Order, Shipment
 
 
 class ChannelError(RuntimeError):
@@ -125,201 +117,6 @@ class InMemoryChannel(ChannelConnector):
         self.inbox.append(order)
 
 
-# -- Shopify ---------------------------------------------------------------
-
-SHOPIFY_API_VERSION = "2025-01"
-
-_FULFILLMENT_ORDERS_QUERY = """
-query orderFulfillmentOrders($id: ID!) {
-  order(id: $id) {
-    id
-    name
-    fulfillmentOrders(first: 10) {
-      nodes {
-        id
-        status
-        lineItems(first: 50) { nodes { id remainingQuantity } }
-      }
-    }
-  }
-}
-"""
-
-_FULFILLMENT_CREATE_MUTATION = """
-mutation fulfillmentCreate($fulfillment: FulfillmentInput!) {
-  fulfillmentCreate(fulfillment: $fulfillment) {
-    fulfillment { id status trackingInfo(first: 10) { company number url } }
-    userErrors { field message }
-  }
-}
-"""
-
-
-@dataclass
-class ShopifyConnector(ChannelConnector):
-    """Live Shopify adapter over the GraphQL Admin API.
-
-    The fulfilment path is the part worth spelling out, because it is not
-    obvious from the outside. Shipping an order is two calls, not one:
-
-    1. Read the order's ``fulfillmentOrders`` -- Shopify's unit of fulfilment
-       work, one per assigned location -- and its remaining line items.
-    2. Call ``fulfillmentCreate`` with ``lineItemsByFulfillmentOrder`` and the
-       ``trackingInfo``. Later corrections go through
-       ``fulfillmentTrackingInfoUpdate`` instead.
-
-    One constraint that bites dropshippers specifically: since API version
-    2024-10, ``fulfillmentCreate`` only works for orders assigned to a
-    merchant-managed location or to a fulfilment service you own. An order
-    routed to somebody else's third-party fulfilment service will reject, and
-    the fix is ``fulfillmentOrderSubmitFulfillmentRequest`` instead.
-    """
-
-    shop_domain: str = ""
-    channel: Channel = Channel.SHOPIFY
-    token_ref: SecretRef = field(default_factory=lambda: SecretRef("SHOPIFY_ACCESS_TOKEN"))
-    resolver: SecretResolver = field(default_factory=SecretResolver)
-    limiter: RateLimiter = field(default_factory=lambda: RateLimiter(capacity=4, refill_per_second=2.0))
-    guard: IdempotencyGuard = field(default_factory=IdempotencyGuard)
-    timeout: float = 20.0
-
-    def is_live(self) -> bool:
-        return bool(self.shop_domain) and self.resolver.has(self.token_ref)
-
-    @property
-    def endpoint(self) -> str:
-        return f"https://{self.shop_domain}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
-
-    def execute(self, query: str, variables: dict | None = None) -> dict:
-        """POST a GraphQL document and return ``data``, raising on any error.
-
-        GraphQL answers 200 for business-logic failures, so both the transport
-        ``errors`` array and every mutation's ``userErrors`` have to be checked
-        explicitly. Treating a 200 as success is the classic way to believe a
-        fulfilment succeeded when it did not.
-        """
-        if not self.shop_domain:
-            raise ChannelError("ShopifyConnector needs shop_domain, e.g. my-shop.myshopify.com")
-        if not self.limiter.allow():
-            raise ChannelError(
-                f"Shopify rate limit reached; retry in {self.limiter.wait_time():.1f}s"
-            )
-        body = json.dumps({"query": query, "variables": variables or {}}).encode("utf-8")
-        request = urllib.request.Request(
-            self.endpoint,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "X-Shopify-Access-Token": self.resolver.resolve(self.token_ref),
-                "Accept": "application/json",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:  # pragma: no cover - needs a live shop
-            raise ChannelError(f"Shopify returned HTTP {exc.code}") from exc
-        except urllib.error.URLError as exc:  # pragma: no cover - needs a network
-            raise ChannelError(f"could not reach Shopify: {exc.reason}") from exc
-
-        if payload.get("errors"):
-            raise ChannelError(f"Shopify GraphQL errors: {payload['errors']}")
-        return payload.get("data") or {}
-
-    @staticmethod
-    def _raise_user_errors(node: dict, action: str) -> None:
-        errors = node.get("userErrors") or []
-        if errors:
-            detail = "; ".join(f"{e.get('field')}: {e.get('message')}" for e in errors)
-            raise ChannelError(f"Shopify rejected {action}: {detail}")
-
-    def publish_listing(self, listing: Listing) -> str:  # pragma: no cover - needs a live shop
-        data = self.execute(
-            """
-            mutation productCreate($input: ProductInput!) {
-              productCreate(input: $input) {
-                product { id }
-                userErrors { field message }
-              }
-            }
-            """,
-            {
-                "input": {
-                    "title": listing.title,
-                    "descriptionHtml": listing.description,
-                    "status": "ACTIVE",
-                }
-            },
-        )
-        node = data.get("productCreate") or {}
-        self._raise_user_errors(node, "productCreate")
-        external_id = (node.get("product") or {}).get("id", "")
-        listing.external_id = external_id
-        listing.state = ListingState.PUBLISHED
-        return external_id
-
-    def update_inventory(self, sku: str, quantity: int) -> bool:  # pragma: no cover
-        raise NotImplementedError(
-            "Inventory needs the location's inventoryItem id: query productVariants "
-            "for inventoryItem.id, then call inventorySetQuantities with that "
-            "location. Wire it once you know which location holds your stock."
-        )
-
-    def fetch_orders(self, since: datetime | None = None) -> list[Order]:  # pragma: no cover
-        raise NotImplementedError(
-            "Map Shopify's order payload onto domain.Order here. Prefer the "
-            "orders/create webhook over polling, and verify its HMAC with "
-            "security.verify_webhook before trusting it."
-        )
-
-    def acknowledge_order(self, order: Order) -> bool:  # pragma: no cover
-        return True  # Shopify has no separate acknowledgement step.
-
-    def submit_tracking(self, order: Order, shipment: Shipment) -> bool:  # pragma: no cover
-        """Fulfil the order and attach tracking, exactly once per shipment."""
-        key = idempotency_key("shopify.fulfil", order.external_id, shipment.tracking_number)
-        if not self.guard.claim(key):
-            return bool(self.guard.result_for(key))
-
-        data = self.execute(_FULFILLMENT_ORDERS_QUERY, {"id": order.external_id})
-        nodes = (((data.get("order") or {}).get("fulfillmentOrders") or {}).get("nodes")) or []
-        open_orders = [n for n in nodes if n.get("status") in ("OPEN", "IN_PROGRESS")]
-        if not open_orders:
-            raise ChannelError(f"no open fulfillment orders on {order.external_id}")
-
-        line_items = [
-            {
-                "fulfillmentOrderId": node["id"],
-                "fulfillmentOrderLineItems": [
-                    {"id": li["id"], "quantity": li["remainingQuantity"]}
-                    for li in (node.get("lineItems") or {}).get("nodes", [])
-                    if li.get("remainingQuantity", 0) > 0
-                ],
-            }
-            for node in open_orders
-        ]
-        result = self.execute(
-            _FULFILLMENT_CREATE_MUTATION,
-            {
-                "fulfillment": {
-                    "lineItemsByFulfillmentOrder": line_items,
-                    "notifyCustomer": True,
-                    "trackingInfo": {
-                        "company": shipment.carrier,
-                        "number": shipment.tracking_number,
-                        "url": shipment.tracking_url,
-                    },
-                }
-            },
-        )
-        node = result.get("fulfillmentCreate") or {}
-        self._raise_user_errors(node, "fulfillmentCreate")
-        succeeded = (node.get("fulfillment") or {}).get("status") == "SUCCESS"
-        self.guard.record(key, succeeded)
-        return succeeded
-
-
 # -- Amazon and eBay -------------------------------------------------------
 
 
@@ -395,7 +192,25 @@ def connector_for(channel: Channel, live: bool = False, **kwargs) -> ChannelConn
     if not live:
         return InMemoryChannel(channel=channel)
     if channel is Channel.SHOPIFY:
+        # Imported here rather than at module scope: shopify.py depends on this
+        # module for the port, so a top-level import would be circular.
+        from .shopify import ShopifyConnector
+
         return ShopifyConnector(**kwargs)
     if channel is Channel.AMAZON:
         return amazon_connector()
     return ebay_connector()
+
+
+def __getattr__(name: str):
+    """Keep ``channels.ShopifyConnector`` working after the move.
+
+    The adapter lives in :mod:`storefront_agent.shopify` now. Resolving it
+    lazily here means existing imports keep working without reintroducing the
+    circular dependency a real re-export would create.
+    """
+    if name == "ShopifyConnector":
+        from .shopify import ShopifyConnector
+
+        return ShopifyConnector
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

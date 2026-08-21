@@ -114,13 +114,13 @@ class TestLiveAdapters:
 
     def test_shopify_surfaces_user_errors_rather_than_reporting_success(self):
         with pytest.raises(ChannelError, match="rejected fulfillmentCreate"):
-            ShopifyConnector._raise_user_errors(
+            ShopifyConnector.raise_user_errors(
                 {"userErrors": [{"field": "trackingInfo", "message": "is invalid"}]},
                 "fulfillmentCreate",
             )
 
     def test_shopify_accepts_an_empty_user_errors_array(self):
-        ShopifyConnector._raise_user_errors({"userErrors": []}, "fulfillmentCreate")
+        ShopifyConnector.raise_user_errors({"userErrors": []}, "fulfillmentCreate")
 
     def test_shopify_rate_limiter_eventually_refuses(self):
         # Drain on the real monotonic clock: the limiter refills against it, so
